@@ -1,0 +1,305 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: grafana-cluster-monitoring-978c59fdf-t2qqc
+  generateName: grafana-cluster-monitoring-978c59fdf-
+  namespace: cattle-prometheus
+  selfLink: >-
+    /api/v1/namespaces/cattle-prometheus/pods/grafana-cluster-monitoring-978c59fdf-t2qqc
+  uid: 9d885b45-eb98-4aec-bf82-5a2ceb67a93c
+  resourceVersion: '19943866'
+  creationTimestamp: '2020-08-13T10:10:20Z'
+  labels:
+    app: grafana
+    chart: grafana-0.0.1
+    pod-template-hash: 978c59fdf
+    release: cluster-monitoring
+  annotations:
+    kubernetes.io/psp: eks.privileged
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: grafana-cluster-monitoring-978c59fdf
+      uid: aa474ea8-edef-4e69-8f5b-cc526d378d5d
+      controller: true
+      blockOwnerDeletion: true
+spec:
+  volumes:
+    - name: grafana-static-contents
+      emptyDir: {}
+    - name: grafana-storage
+      persistentVolumeClaim:
+        claimName: grafana-cluster-monitoring
+    - name: grafana-nginx
+      configMap:
+        name: grafana-cluster-monitoring-nginx
+        items:
+          - key: nginx.conf
+            path: nginx.conf
+            mode: 438
+          - key: copy-datasource-plugin-json.sh
+            path: copy-datasource-plugin-json.sh
+            mode: 511
+          - key: modify-datasource-plugin-json.sh
+            path: modify-datasource-plugin-json.sh
+            mode: 511
+        defaultMode: 420
+    - name: grafana-dashboards
+      configMap:
+        name: grafana-cluster-monitoring-dashboards
+        defaultMode: 420
+    - name: grafana-istio-dashboards
+      configMap:
+        name: grafana-istio-cluster-monitoring-dashboards
+        defaultMode: 420
+    - name: grafana-provisionings
+      configMap:
+        name: grafana-cluster-monitoring-provisionings
+        defaultMode: 420
+    - name: nginx-home
+      emptyDir: {}
+    - name: cluster-monitoring-token-h9bg4
+      secret:
+        secretName: cluster-monitoring-token-h9bg4
+        defaultMode: 420
+  initContainers:
+    - name: grafana-init-plugin-json-copy
+      image: 'rancher/grafana-grafana:6.7.4'
+      resources:
+        limits:
+          cpu: 50m
+          memory: 50Mi
+        requests:
+          cpu: 50m
+          memory: 50Mi
+      volumeMounts:
+        - name: grafana-nginx
+          mountPath: /run.sh
+          subPath: copy-datasource-plugin-json.sh
+        - name: grafana-static-contents
+          mountPath: /host
+        - name: cluster-monitoring-token-h9bg4
+          readOnly: true
+          mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      imagePullPolicy: IfNotPresent
+    - name: grafana-init-plugin-json-modify
+      image: 'rancher/prometheus-auth:v0.2.0'
+      command:
+        - /run.sh
+      resources:
+        limits:
+          cpu: 50m
+          memory: 50Mi
+        requests:
+          cpu: 50m
+          memory: 50Mi
+      volumeMounts:
+        - name: grafana-nginx
+          mountPath: /run.sh
+          subPath: modify-datasource-plugin-json.sh
+        - name: grafana-static-contents
+          mountPath: /host
+        - name: cluster-monitoring-token-h9bg4
+          readOnly: true
+          mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      imagePullPolicy: IfNotPresent
+  containers:
+    - name: grafana
+      image: 'rancher/grafana-grafana:6.7.4'
+      ports:
+        - name: web
+          containerPort: 3000
+          protocol: TCP
+      env:
+        - name: GF_AUTH_BASIC_ENABLED
+          value: 'true'
+        - name: GF_AUTH_ANONYMOUS_ENABLED
+          value: 'true'
+      resources:
+        limits:
+          cpu: 200m
+          memory: 200Mi
+        requests:
+          cpu: 100m
+          memory: 100Mi
+      volumeMounts:
+        - name: grafana-storage
+          mountPath: /var/lib/grafana
+        - name: grafana-static-contents
+          mountPath: >-
+            /usr/share/grafana/public/app/plugins/datasource/prometheus/plugin.json
+          subPath: grafana/plugin.json
+        - name: grafana-dashboards
+          mountPath: /var/lib/grafana/rancher-dashboards
+        - name: grafana-istio-dashboards
+          mountPath: /var/lib/grafana/rancher-istio-dashboards
+        - name: grafana-provisionings
+          mountPath: /etc/grafana/provisioning/dashboards/all.yaml
+          subPath: dashboards.yaml
+        - name: grafana-provisionings
+          mountPath: /etc/grafana/provisioning/datasources/all.yaml
+          subPath: datasources.yaml
+        - name: cluster-monitoring-token-h9bg4
+          readOnly: true
+          mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      readinessProbe:
+        httpGet:
+          path: /api/health
+          port: 3000
+          scheme: HTTP
+        initialDelaySeconds: 30
+        timeoutSeconds: 1
+        periodSeconds: 1
+        successThreshold: 1
+        failureThreshold: 10
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      imagePullPolicy: IfNotPresent
+    - name: grafana-proxy
+      image: 'rancher/nginx:1.17.4-alpine'
+      args:
+        - nginx
+        - '-g'
+        - daemon off;
+        - '-c'
+        - /nginx/nginx.conf
+      ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+      resources:
+        limits:
+          cpu: 100m
+          memory: 100Mi
+        requests:
+          cpu: 50m
+          memory: 50Mi
+      volumeMounts:
+        - name: grafana-nginx
+          mountPath: /nginx/
+        - name: nginx-home
+          mountPath: /var/cache/nginx
+        - name: cluster-monitoring-token-h9bg4
+          readOnly: true
+          mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        runAsUser: 101
+        runAsGroup: 101
+  restartPolicy: Always
+  terminationGracePeriodSeconds: 30
+  dnsPolicy: ClusterFirst
+  nodeSelector:
+    kubernetes.io/os: linux
+  serviceAccountName: cluster-monitoring
+  serviceAccount: cluster-monitoring
+  nodeName: ip-192-168-175-172.eu-central-1.compute.internal
+  securityContext:
+    runAsUser: 472
+    runAsGroup: 472
+    fsGroup: 472
+  schedulerName: default-scheduler
+  tolerations:
+    - key: cattle.io/os
+      operator: Equal
+      value: linux
+      effect: NoSchedule
+    - key: node.kubernetes.io/not-ready
+      operator: Exists
+      effect: NoExecute
+      tolerationSeconds: 300
+    - key: node.kubernetes.io/unreachable
+      operator: Exists
+      effect: NoExecute
+      tolerationSeconds: 300
+  priority: 0
+  enableServiceLinks: true
+status:
+  phase: Running
+  conditions:
+    - type: Initialized
+      status: 'True'
+      lastProbeTime: null
+      lastTransitionTime: '2020-08-13T10:10:43Z'
+    - type: Ready
+      status: 'True'
+      lastProbeTime: null
+      lastTransitionTime: '2020-08-13T10:11:13Z'
+    - type: ContainersReady
+      status: 'True'
+      lastProbeTime: null
+      lastTransitionTime: '2020-08-13T10:11:13Z'
+    - type: PodScheduled
+      status: 'True'
+      lastProbeTime: null
+      lastTransitionTime: '2020-08-13T10:10:20Z'
+  hostIP: 192.168.175.172
+  podIP: 192.168.154.82
+  startTime: '2020-08-13T10:10:20Z'
+  initContainerStatuses:
+    - name: grafana-init-plugin-json-copy
+      state:
+        terminated:
+          exitCode: 0
+          reason: Completed
+          startedAt: '2020-08-13T10:10:40Z'
+          finishedAt: '2020-08-13T10:10:40Z'
+          containerID: >-
+            docker://cce10a0f1500fa41e4bdacf7deb41c1d07e7a6f514dfc4983460542f6b608613
+      lastState: {}
+      ready: true
+      restartCount: 0
+      image: 'rancher/grafana-grafana:6.7.4'
+      imageID: >-
+        docker-pullable://rancher/grafana-grafana@sha256:43340812d14aa3e60810b85ee9caaf0e423e7aad01000b704cd8ddfb2bb1248e
+      containerID: >-
+        docker://cce10a0f1500fa41e4bdacf7deb41c1d07e7a6f514dfc4983460542f6b608613
+    - name: grafana-init-plugin-json-modify
+      state:
+        terminated:
+          exitCode: 0
+          reason: Completed
+          startedAt: '2020-08-13T10:10:41Z'
+          finishedAt: '2020-08-13T10:10:42Z'
+          containerID: >-
+            docker://668757a6206057cf4ae8b0455564b4d57c605dc5b4900f80b76ebb803b68dd00
+      lastState: {}
+      ready: true
+      restartCount: 0
+      image: 'rancher/prometheus-auth:v0.2.0'
+      imageID: >-
+        docker-pullable://rancher/prometheus-auth@sha256:8f715bf8eb4ea41c6598ccd244da51743d14f5a5c7cb93091fdced531cf48dbe
+      containerID: >-
+        docker://668757a6206057cf4ae8b0455564b4d57c605dc5b4900f80b76ebb803b68dd00
+  containerStatuses:
+    - name: grafana
+      state:
+        running:
+          startedAt: '2020-08-13T10:10:43Z'
+      lastState: {}
+      ready: true
+      restartCount: 0
+      image: 'rancher/grafana-grafana:6.7.4'
+      imageID: >-
+        docker-pullable://rancher/grafana-grafana@sha256:43340812d14aa3e60810b85ee9caaf0e423e7aad01000b704cd8ddfb2bb1248e
+      containerID: >-
+        docker://c05954f138b207c6a801e5e2e335940bf13d6d7b716f91ed63e06ce883d4243d
+    - name: grafana-proxy
+      state:
+        running:
+          startedAt: '2020-08-13T10:10:44Z'
+      lastState: {}
+      ready: true
+      restartCount: 0
+      image: 'rancher/nginx:1.17.4-alpine'
+      imageID: >-
+        docker-pullable://rancher/nginx@sha256:d48cc9a02c191ba23418522d468b3c75ed287e23018a6b6ff64043e264b5a394
+      containerID: >-
+        docker://7bbb7fa52e8211dd2c16b245d8dc713e7e8bef7eee595087092f8192d5d7da32
+  qosClass: Burstable
