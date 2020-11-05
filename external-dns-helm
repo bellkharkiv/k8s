@@ -1,0 +1,6 @@
+helm install <NAME> --namespace kube-system \
+  --set provider=aws \
+  --set aws.credentials.accessKey=****************** \
+  --set aws.credentials.secretKey=***************** \
+  --set aws.region=eu-central-1 \
+  bitnami/external-dns
