@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: livestream
+  name: livestream
+spec:
+  minReadySeconds: 10
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: livestream
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: livestream
+    spec:
+      containers:
+        - env:
+            - name: NODE_ENV
+              value: '${parameters[''NODE_ENV'']}'
+            - name: PORT
+              value: '8080'
+          image: >-
+            registry.***.com/repository/***/media-server-nodejs:${trigger['tag']}
+          imagePullPolicy: Always
+          name: livestream
+          resources:
+            limits:
+              cpu: 2
+              memory: 4Gi
+            requests:
+              cpu: 1
+              memory: 2Gi
+      imagePullSecrets:
+        - name: iconiq-nexus
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: livestream
+  name: livestream
+spec:
+  ports:
+    - name: rtmp
+      port: 1935
+      protocol: TCP
+  selector:
+    app: livestream
+  type: LoadBalancer #NodePort
