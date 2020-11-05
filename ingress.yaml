@@ -1,0 +1,40 @@
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+    alb.ingress.kubernetes.io/actions.ssl-redirect: >-
+      {"Type": "redirect", "RedirectConfig": { "Protocol": "HTTPS", "Port":
+      "443", "StatusCode": "HTTP_301"}}
+    alb.ingress.kubernetes.io/backend-protocol: HTTP
+    alb.ingress.kubernetes.io/certificate-arn: >-
+      arn:aws:acm:eu-central-1:06****
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS":443}]'
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    artifact.spinnaker.io/location: qa
+    artifact.spinnaker.io/name: qa
+    artifact.spinnaker.io/type: kubernetes/ingress
+    kubernetes.io/ingress.class: alb
+    moniker.spinnaker.io/application: qa
+    moniker.spinnaker.io/cluster: qa
+  labels:
+    app: ingress-hosts
+    app.kubernetes.io/managed-by: spinnaker
+    app.kubernetes.io/name: qa
+  name: qa-01
+  namespace: qa
+spec:
+  rules:
+    - host: iq-rest-api-nodejs-dev-qa.k8s.***.com
+      http:
+        paths:
+          - backend:
+              serviceName: iqrestapinodejs
+              servicePort: 80
+            path: /*
+    - host: iq-rest-api-nodejs-qa-qa.k8s.***.com
+      http:
+        paths:
+          - backend:
+              serviceName: iqrestapinodejsqa
+              servicePort: 80
+            path: /*
